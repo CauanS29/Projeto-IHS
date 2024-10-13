@@ -117,16 +117,14 @@ Image *loadImage(const char *filename) {
     png_byte color_type = png_get_color_type(png, info);
     png_byte bit_depth = png_get_bit_depth(png, info);
 
-    if (bit_depth == 16)
-        png_set_strip_16(png);
+    // Força conversão para RGB se necessário
     if (color_type == PNG_COLOR_TYPE_PALETTE)
         png_set_palette_to_rgb(png);
     if (color_type == PNG_COLOR_TYPE_GRAY && bit_depth < 8)
         png_set_expand_gray_1_2_4_to_8(png);
-    if (png_get_valid(png, info, PNG_INFO_tRNS))
-        png_set_tRNS_to_alpha(png);
+    if (color_type == PNG_COLOR_TYPE_RGBA)  // Se tiver alpha, remove
+        png_set_strip_alpha(png);
 
-    png_set_filler(png, 0xFF, PNG_FILLER_AFTER);
     png_read_update_info(png, info);
 
     Image *img = (Image *)malloc(sizeof(Image));
@@ -143,7 +141,7 @@ Image *loadImage(const char *filename) {
 
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
-            png_bytep px = &(row_pointers[y][x * 4]);
+            png_bytep px = &(row_pointers[y][x * 3]);  // Agora lê apenas 3 bytes (RGB)
             img->pixels[y * width + x].r = px[0];
             img->pixels[y * width + x].g = px[1];
             img->pixels[y * width + x].b = px[2];
@@ -154,6 +152,7 @@ Image *loadImage(const char *filename) {
     png_destroy_read_struct(&png, &info, NULL);
     return img;
 }
+
 
 // Função para salvar a imagem PNG
 void saveImage(const char *filename, Image *img) {
@@ -184,12 +183,13 @@ void saveImage(const char *filename, Image *img) {
 
     png_init_io(png, fp);
 
+    // Definindo para salvar uma imagem com 3 canais (RGB), sem alpha
     png_set_IHDR(
         png,
         info,
         img->width, img->height,
         8,
-        PNG_COLOR_TYPE_RGBA,
+        PNG_COLOR_TYPE_RGB,  // Alterado para RGB
         PNG_INTERLACE_NONE,
         PNG_COMPRESSION_TYPE_DEFAULT,
         PNG_FILTER_TYPE_DEFAULT
@@ -197,15 +197,15 @@ void saveImage(const char *filename, Image *img) {
 
     png_write_info(png, info);
 
+    // Alocando os ponteiros de linha
     png_bytep row_pointers[img->height];
     for (int y = 0; y < img->height; y++) {
-        row_pointers[y] = (png_bytep)malloc(img->width * 4 * sizeof(png_byte));
+        row_pointers[y] = (png_bytep)malloc(img->width * 3 * sizeof(png_byte));  // 3 bytes por pixel (RGB)
         for (int x = 0; x < img->width; x++) {
             Pixel *pixel = &(img->pixels[y * img->width + x]);
-            row_pointers[y][x * 4] = pixel->r;
-            row_pointers[y][x * 4 + 1] = pixel->g;
-            row_pointers[y][x * 4 + 2] = pixel->b;
-            row_pointers[y][x * 4 + 3] = 0xFF;
+            row_pointers[y][x * 3] = pixel->r;
+            row_pointers[y][x * 3 + 1] = pixel->g;
+            row_pointers[y][x * 3 + 2] = pixel->b;
         }
     }
 
